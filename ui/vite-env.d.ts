@@ -43,10 +43,14 @@ interface ImportMetaEnv {
   readonly VITE_DEVICE_ID: string;
   readonly VITE_DEVICE_PASSWORD: string;
   readonly VITE_CLOUD_API_URL: string;
+  readonly VITE_CLOUD_API: string;
   readonly VITE_CLOUD_APP_URL: string;
   readonly VITE_USE_SSL: string;
   readonly VITE_PROXY_URL: string;
   readonly MODE: string;
+  readonly DEV: boolean;
+  readonly PROD: boolean;
+  readonly SSR: boolean;
 }
 
 interface ImportMeta {
