@@ -553,7 +553,7 @@ function DeviceFileView({
   const syncStorage = useCallback(() => {
     send("listStorageFiles", {}, (resp: JsonRpcResponse) => {
       if ("error" in resp) {
-        notifications.error(`Error listing storage files: ${resp.error}`);
+        notifications.error(`Error listing storage files: ${resp.error.message}`);
         return;
       }
       const { files } = resp.result as StorageFiles;
@@ -568,7 +568,7 @@ function DeviceFileView({
 
     send("getStorageSpace", {}, (resp: JsonRpcResponse) => {
       if ("error" in resp) {
-        notifications.error(`Error getting storage space: ${resp.error}`);
+        notifications.error(`Error getting storage space: ${resp.error.message}`);
         return;
       }
 
@@ -597,7 +597,7 @@ function DeviceFileView({
     console.log("Deleting file:", file);
     send("deleteStorageFile", { filename: file.name }, (resp: JsonRpcResponse) => {
       if ("error" in resp) {
-        notifications.error(`Error deleting file: ${resp.error}`);
+        notifications.error(`Error deleting file: ${resp.error.message}`);
         return;
       }
 
