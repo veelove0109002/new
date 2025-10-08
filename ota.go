@@ -62,6 +62,15 @@ func GetLocalVersion() (systemVersion *semver.Version, appVersion *semver.Versio
 
 	systemVersionBytes, err := os.ReadFile("/version")
 	if err != nil {
+		// If /version file doesn't exist (e.g., in development environment),
+		// use a default system version
+		if os.IsNotExist(err) {
+			systemVersion, err = semver.NewVersion("1.0.0-dev")
+			if err != nil {
+				return nil, appVersion, fmt.Errorf("invalid default system version: %w", err)
+			}
+			return systemVersion, appVersion, nil
+		}
 		return nil, appVersion, fmt.Errorf("error reading system version: %w", err)
 	}
 
