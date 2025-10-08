@@ -66,7 +66,16 @@ func setMassStorageMode(cdrom bool) error {
 		return nil
 	}
 
-	return gadget.UpdateGadgetConfig()
+	err = gadget.UpdateGadgetConfig()
+	if err != nil {
+		return fmt.Errorf("failed to update gadget config: %w", err)
+	}
+
+	// Give the USB device time to reconnect after reconfiguration
+	time.Sleep(2 * time.Second)
+	
+	logger.Info().Bool("cdrom", cdrom).Msg("mass storage mode updated, waiting for device reconnection")
+	return nil
 }
 
 func mountImage(imagePath string) error {
@@ -74,14 +83,19 @@ func mountImage(imagePath string) error {
 	if err != nil {
 		return fmt.Errorf("remove mass storage image error: %w", err)
 	}
+	
+	// Small delay to ensure the previous image is properly unmounted
+	time.Sleep(500 * time.Millisecond)
+	
 	err = setMassStorageImage(imagePath)
 	if err != nil {
 		return fmt.Errorf("set mass storage image error: %w", err)
 	}
-	err = setMassStorageImage(imagePath)
-	if err != nil {
-		return fmt.Errorf("set Mass Storage Image Error: %w", err)
-	}
+	
+	// Give the USB device time to recognize the new image
+	time.Sleep(1 * time.Second)
+	
+	logger.Info().Str("imagePath", imagePath).Msg("virtual media image mounted successfully")
 	return nil
 }
 
@@ -306,12 +320,18 @@ func rpcMountWithHTTP(url string, mode VirtualMediaMode) error {
 		return err
 	}
 	logger.Debug().Msg("nbd device started")
-	//TODO: replace by polling on block device having right size
-	time.Sleep(1 * time.Second)
+	
+	// Wait for NBD device to be ready and give USB device time to reconnect
+	time.Sleep(2 * time.Second)
+	
 	err = setMassStorageImage("/dev/nbd0")
 	if err != nil {
 		return err
 	}
+	
+	// Additional delay to ensure the USB device recognizes the new virtual media
+	time.Sleep(1 * time.Second)
+	
 	logger.Info().Msg("usb mass storage mounted")
 	return nil
 }
