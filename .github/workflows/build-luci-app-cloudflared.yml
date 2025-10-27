@@ -80,6 +80,8 @@ jobs:
             printf '%s\n' 'PKG_NAME:=luci-app-cloudflared'
             printf '%s\n' 'PKG_VERSION:=1.0.0'
             printf '%s\n' 'PKG_RELEASE:=1'
+            printf '%s\n' 'PKG_LICENSE:=MIT'
+            printf '%s\n' 'PKG_MAINTAINER:=auto-builder'
             printf '\n'
             printf '%s\n' 'include $(TOPDIR)/feeds/luci/luci.mk'
             printf '%s\n' '# call BuildPackage - OpenWrt buildroot signature'
@@ -148,7 +150,10 @@ jobs:
         working-directory: ${{ env.SDK_DIR }}
         run: |
           set -e
-          make package/luci/host/compile V=s || true
+          make package/luci/host/prepare package/luci/host/compile V=s || true
+          make package/feeds/luci/luci-base/compile V=s -j"$(nproc)" || true
+          make package/feeds/luci/luci-compat/compile V=s -j"$(nproc)" || true
+          make package/feeds/luci/luci-light/compile V=s -j"$(nproc)" || true
           make package/luci-app-cloudflared/compile V=s -j"$(nproc)"
           if [ -f package/custom/luci-app-cloudflared/po/zh-cn/cloudflared.po ]; then
             po2lmo package/custom/luci-app-cloudflared/po/zh-cn/cloudflared.po \
