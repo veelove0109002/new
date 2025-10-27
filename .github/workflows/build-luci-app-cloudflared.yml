@@ -6,7 +6,7 @@ on:
       openwrt_sdk:
         description: OpenWrt SDK tar.xz URL (match your target)
         required: true
-        default: https://downloads.openwrt.org/releases/23.05.3/targets/x86/64/openwrt-sdk-23.05.3-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+        default: "https://downloads.openwrt.org/releases/23.05.3/targets/x86/64/openwrt-sdk-23.05.3-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
 
 jobs:
   build:
@@ -71,66 +71,66 @@ jobs:
                    "$PKGDIR/po/zh-cn" \
                    "$PKGDIR/root/etc/config"
 
-          cat > "$PKGDIR/Makefile" <<'EOF'
-include $(TOPDIR)/rules.mk
+          {
+            printf '%s\n' 'include $(TOPDIR)/rules.mk'
+            printf '\n'
+            printf '%s\n' 'LUCI_TITLE:=LuCI support for Cloudflared'
+            printf '%s\n' 'LUCI_PKGARCH:=all'
+            printf '%s\n' 'LUCI_DEPENDS:=+luci-compat'
+            printf '%s\n' 'PKG_NAME:=luci-app-cloudflared'
+            printf '%s\n' 'PKG_VERSION:=1.0.0'
+            printf '%s\n' 'PKG_RELEASE:=1'
+            printf '\n'
+            printf '%s\n' 'include $(TOPDIR)/feeds/luci/luci.mk'
+            printf '%s\n' '# call BuildPackage - OpenWrt buildroot signature'
+          } > "$PKGDIR/Makefile"
 
-LUCI_TITLE:=LuCI support for Cloudflared
-LUCI_PKGARCH:=all
-LUCI_DEPENDS:=+luci-compat
-PKG_NAME:=luci-app-cloudflared
-PKG_VERSION:=1.0.0
-PKG_RELEASE:=1
+          {
+            printf '%s\n' 'module("luci.controller.cloudflared", package.seeall)'
+            printf '\n'
+            printf '%s\n' 'function index()'
+            printf '%s\n' '  if not nixio.fs.access("/etc/config/cloudflared") then return end'
+            printf '%s\n' '  entry({"admin","services","cloudflared"}, cbi("cloudflared/config"), _("Cloudflared"), 60).dependent=false'
+            printf '%s\n' 'end'
+          } > "$PKGDIR/luasrc/controller/cloudflared.lua"
 
-include $(TOPDIR)/feeds/luci/luci.mk
-# call BuildPackage - OpenWrt buildroot signature
-EOF
+          {
+            printf '%s\n' 'local m = Map("cloudflared", translate("Cloudflared"), translate("Configure Cloudflare Tunnel client."))'
+            printf '\n'
+            printf '%s\n' 'local s = m:section(TypedSection, "cloudflared", translate("General Settings"))'
+            printf '%s\n' 's.anonymous = true'
+            printf '\n'
+            printf '%s\n' 'local o = s:option(Flag, "enabled", translate("Enable"))'
+            printf '%s\n' 'o.rmempty = false'
+            printf '\n'
+            printf '%s\n' 'local t = s:option(Value, "token", translate("Tunnel Token"))'
+            printf '%s\n' 't.password = true'
+            printf '\n'
+            printf '%s\n' 'return m'
+          } > "$PKGDIR/luasrc/model/cbi/cloudflared/config.lua"
 
-          cat > "$PKGDIR/luasrc/controller/cloudflared.lua" <<'EOF'
-module("luci.controller.cloudflared", package.seeall)
+          {
+            printf '%s\n' 'msgid "Cloudflared"'
+            printf '%s\n' 'msgstr "Cloudflared"'
+            printf '\n'
+            printf '%s\n' 'msgid "Configure Cloudflare Tunnel client."'
+            printf '%s\n' 'msgstr "配置 Cloudflare Tunnel 客户端。"'
+            printf '\n'
+            printf '%s\n' 'msgid "General Settings"'
+            printf '%s\n' 'msgstr "常规设置"'
+            printf '\n'
+            printf '%s\n' 'msgid "Enable"'
+            printf '%s\n' 'msgstr "启用"'
+            printf '\n'
+            printf '%s\n' 'msgid "Tunnel Token"'
+            printf '%s\n' 'msgstr "隧道令牌"'
+          } > "$PKGDIR/po/zh-cn/cloudflared.po"
 
-function index()
-  if not nixio.fs.access("/etc/config/cloudflared") then return end
-  entry({"admin","services","cloudflared"}, cbi("cloudflared/config"), _("Cloudflared"), 60).dependent=false
-end
-EOF
-
-          cat > "$PKGDIR/luasrc/model/cbi/cloudflared/config.lua" <<'EOF'
-local m = Map("cloudflared", translate("Cloudflared"), translate("Configure Cloudflare Tunnel client."))
-
-local s = m:section(TypedSection, "cloudflared", translate("General Settings"))
-s.anonymous = true
-
-local o = s:option(Flag, "enabled", translate("Enable"))
-o.rmempty = false
-
-local t = s:option(Value, "token", translate("Tunnel Token"))
-t.password = true
-
-return m
-EOF
-
-          cat > "$PKGDIR/po/zh-cn/cloudflared.po" <<'EOF'
-msgid "Cloudflared"
-msgstr "Cloudflared"
-
-msgid "Configure Cloudflare Tunnel client."
-msgstr "配置 Cloudflare Tunnel 客户端。"
-
-msgid "General Settings"
-msgstr "常规设置"
-
-msgid "Enable"
-msgstr "启用"
-
-msgid "Tunnel Token"
-msgstr "隧道令牌"
-EOF
-
-          cat > "$PKGDIR/root/etc/config/cloudflared" <<'EOF'
-config cloudflared 'config'
-  option enabled '0'
-  option token ''
-EOF
+          {
+            printf '%s\n' "config cloudflared 'config'"
+            printf '%s\n' "  option enabled '0'"
+            printf '%s\n' "  option token ''"
+          } > "$PKGDIR/root/etc/config/cloudflared"
 
       - name: Configure SDK
         working-directory: ${{ env.SDK_DIR }}
