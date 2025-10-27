@@ -59,7 +59,7 @@ jobs:
           printf "src-git luci https://github.com/openwrt/luci;%s\n" "$FEED_BRANCH" >> feeds.conf.default
 
           ./scripts/feeds update -a
-          ./scripts/feeds install -p luci luci-base luci-compat luci-light luci-mod-admin-full luci-mod-system luci-mod-status luci-lib-ip luci-lib-jsonc luci-lib-nixio rpcd rpcd-mod-luci cgi-io uhttpd uhttpd-mod-ubus luci-i18n-base-zh-cn || true
+          ./scripts/feeds install -p luci luci-base luci-compat luci-lib-ip luci-lib-jsonc luci-lib-nixio rpcd rpcd-mod-luci luci-i18n-base-zh-cn || true
 
       - name: Create built-in luci-app-cloudflared (with zh-cn)
         working-directory: ${{ env.SDK_DIR }}
@@ -153,7 +153,9 @@ jobs:
           make package/luci/host/prepare package/luci/host/compile V=s || true
           make package/feeds/luci/luci-base/compile V=s -j"$(nproc)" || true
           make package/feeds/luci/luci-compat/compile V=s -j"$(nproc)" || true
-          make package/feeds/luci/luci-light/compile V=s -j"$(nproc)" || true
+          make package/feeds/luci/luci-lib-ip/compile V=s -j"$(nproc)" || true
+          make package/feeds/luci/luci-lib-nixio/compile V=s -j"$(nproc)" || true
+          make package/feeds/luci/luci-lib-jsonc/compile V=s -j"$(nproc)" || true
           make package/luci-app-cloudflared/compile V=s -j"$(nproc)"
           if [ -f package/custom/luci-app-cloudflared/po/zh-cn/cloudflared.po ]; then
             po2lmo package/custom/luci-app-cloudflared/po/zh-cn/cloudflared.po \
