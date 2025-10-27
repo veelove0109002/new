@@ -50,7 +50,7 @@ jobs:
           restore-keys: |
             dl-
 
-      - name: Setup SDK feeds and minimal LuCI
+      - name: Setup SDK feeds (luci only)
         working-directory: ${{ env.SDK_DIR }}
         run: |
           set -e
@@ -58,7 +58,6 @@ jobs:
           printf "src-git luci https://github.com/openwrt/luci;%s\n" "$FEED_BRANCH" > feeds.conf.default
 
           ./scripts/feeds update luci
-          ./scripts/feeds install -p luci luci-base luci-compat luci-lib-ip luci-lib-jsonc luci-lib-nixio || true
 
       - name: Create built-in luci-app-cloudflared (with zh-cn)
         working-directory: ${{ env.SDK_DIR }}
@@ -159,11 +158,8 @@ jobs:
         run: |
           set -e
           make package/luci/host/prepare package/luci/host/compile V=s || true
-          make package/feeds/luci/luci-base/compile V=s -j"$(nproc)" || true
-          make package/feeds/luci/luci-compat/compile V=s -j"$(nproc)" || true
-          make package/feeds/luci/luci-lib-ip/compile V=s -j"$(nproc)" || true
-          make package/feeds/luci/luci-lib-nixio/compile V=s -j"$(nproc)" || true
-          make package/feeds/luci/luci-lib-jsonc/compile V=s -j"$(nproc)" || true
+          make package/feeds/luci/luci-base/compile V=s -j"$(nproc)"
+          make package/feeds/luci/luci-compat/compile V=s -j"$(nproc)"
           make package/luci-app-cloudflared/compile V=s -j"$(nproc)"
           if [ -f package/custom/luci-app-cloudflared/po/zh-cn/cloudflared.po ]; then
             po2lmo package/custom/luci-app-cloudflared/po/zh-cn/cloudflared.po \
