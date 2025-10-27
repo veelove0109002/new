@@ -66,12 +66,13 @@ jobs:
         working-directory: ${{ env.SDK_DIR }}
         run: |
           set -e
-          echo "src-git packages https://github.com/openwrt/packages" > feeds.conf.default
-          echo "src-git luci https://github.com/openwrt/luci" >> feeds.conf.default
+          FEED_BRANCH=openwrt-23.05
+          echo "src-git packages https://github.com/openwrt/packages;$FEED_BRANCH" > feeds.conf.default
+          echo "src-git luci https://github.com/openwrt/luci;$FEED_BRANCH" >> feeds.conf.default
 
-          ./scripts/feeds update packages luci
-          # Install only necessary LuCI packages to satisfy deps
-          ./scripts/feeds install -p luci luci-base luci-compat || true
+          ./scripts/feeds update -a
+          # Install minimal LuCI set, skip full deps to avoid sdk missing virtuals
+          ./scripts/feeds install -p luci luci-base luci-light luci-compat rpcd-mod-luci cgi-io luci-i18n-base-zh-cn || true
 
           # Prepare custom package dir
           mkdir -p package/custom/luci-app-cloudflared
