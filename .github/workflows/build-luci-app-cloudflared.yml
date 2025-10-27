@@ -4,24 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       openwrt_sdk:
-        description: "OpenWrt SDK download URL (tar.xz)"
+        description: OpenWrt SDK tar.xz URL (match your target)
         required: true
-        default: "https://downloads.openwrt.org/releases/23.05.3/targets/x86/64/openwrt-sdk-23.05.3-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
-      target:
-        description: "Target triple used by SDK (e.g., x86_64)"
-        required: true
-        default: "x86_64"
-      luci_app_repo:
-        description: "owner/repo of luci-app-cloudflared (public repo). Example: someuser/luci-app-cloudflared"
-        required: false
-      luci_app_ref:
-        description: "Branch or tag of luci-app-cloudflared (used when luci_app_repo is set)"
-        required: false
-        default: "main"
-      luci_app_tar:
-        description: "Optional: Direct tarball URL of luci-app-cloudflared (e.g., https://codeload.github.com/<owner>/<repo>/tar.gz/<ref>)"
-        required: false
-        default: ""
+        default: https://downloads.openwrt.org/releases/23.05.3/targets/x86/64/openwrt-sdk-23.05.3-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
 
 jobs:
   build:
@@ -43,8 +28,8 @@ jobs:
 
       - name: Prepare workspace
         run: |
-          mkdir -p $GITHUB_WORKSPACE/.cache/dl
-          echo "CACHE_DIR=$GITHUB_WORKSPACE/.cache" >> $GITHUB_ENV
+          mkdir -p "$GITHUB_WORKSPACE/.cache/dl"
+          echo "CACHE_DIR=$GITHUB_WORKSPACE/.cache" >> "$GITHUB_ENV"
 
       - name: Download OpenWrt SDK
         id: sdk
@@ -55,30 +40,26 @@ jobs:
           wget -q "$SDK_URL"
           tar -xf "$SDK_ARCHIVE"
           SDK_DIR=$(tar -tf "$SDK_ARCHIVE" | head -1 | cut -f1 -d"/")
-          echo "SDK_DIR=$SDK_DIR" >> $GITHUB_ENV
+          echo "SDK_DIR=$SDK_DIR" >> "$GITHUB_ENV"
 
       - name: Cache downloads (dl)
         uses: actions/cache@v4
         with:
           path: ${{ env.CACHE_DIR }}/dl
-          key: dl-${{ hashFiles('**/feeds.conf.default') }}-${{ inputs.openwrt_sdk }}
+          key: dl-${{ inputs.openwrt_sdk }}
           restore-keys: |
             dl-
 
-      - name: Setup SDK feeds and packages
+      - name: Setup SDK feeds and minimal LuCI
         working-directory: ${{ env.SDK_DIR }}
         run: |
           set -e
           FEED_BRANCH=openwrt-23.05
-          echo "src-git packages https://github.com/openwrt/packages;$FEED_BRANCH" > feeds.conf.default
-          echo "src-git luci https://github.com/openwrt/luci;$FEED_BRANCH" >> feeds.conf.default
+          printf "src-git packages https://github.com/openwrt/packages;%s\n" "$FEED_BRANCH" > feeds.conf.default
+          printf "src-git luci https://github.com/openwrt/luci;%s\n" "$FEED_BRANCH" >> feeds.conf.default
 
           ./scripts/feeds update -a
-          # Install minimal LuCI set, skip full deps to avoid sdk missing virtuals
           ./scripts/feeds install -p luci luci-base luci-light luci-compat rpcd-mod-luci cgi-io luci-i18n-base-zh-cn || true
-
-          # Prepare custom package dir
-          mkdir -p package/custom/luci-app-cloudflared
 
       - name: Create built-in luci-app-cloudflared (with zh-cn)
         working-directory: ${{ env.SDK_DIR }}
@@ -147,21 +128,18 @@ EOF
 
           cat > "$PKGDIR/root/etc/config/cloudflared" <<'EOF'
 config cloudflared 'config'
-	option enabled '0'
-	option token ''
+  option enabled '0'
+  option token ''
 EOF
 
       - name: Configure SDK
         working-directory: ${{ env.SDK_DIR }}
         run: |
           set -e
-          # Ensure downloads cache is shared
-          mkdir -p $GITHUB_WORKSPACE/.cache/dl
-          ln -sf $GITHUB_WORKSPACE/.cache/dl dl
+          mkdir -p "$GITHUB_WORKSPACE/.cache/dl"
+          ln -sf "$GITHUB_WORKSPACE/.cache/dl" dl
 
-          # Make defconfig (no full target toolchain change allowed in SDK)
           make defconfig
-          # Ensure language package selected
           echo "CONFIG_PACKAGE_luci-app-cloudflared=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-cloudflared-zh-cn=y" >> .config
           make defconfig
@@ -170,16 +148,11 @@ EOF
         working-directory: ${{ env.SDK_DIR }}
         run: |
           set -e
-          # Ensure po2lmo tool is available for LuCI translations
           make package/luci/host/compile V=s || true
-
-          # Build app and LMO from built-in source
-          make package/luci-app-cloudflared/compile V=s -j$(nproc)
-
-          # Build zh-cn translation
+          make package/luci-app-cloudflared/compile V=s -j"$(nproc)"
           if [ -f package/custom/luci-app-cloudflared/po/zh-cn/cloudflared.po ]; then
             po2lmo package/custom/luci-app-cloudflared/po/zh-cn/cloudflared.po \
-                   package/custom/luci-app-cloudflared/po/zh-cn/cloudflared.zh-cn.lmo || true
+              package/custom/luci-app-cloudflared/po/zh-cn/cloudflared.zh-cn.lmo || true
           fi
 
       - name: Collect artifacts
@@ -187,9 +160,9 @@ EOF
         working-directory: ${{ env.SDK_DIR }}
         run: |
           set -e
-          mkdir -p $GITHUB_WORKSPACE/artifacts
-          find bin -type f -name "*.ipk" -print -exec cp {} $GITHUB_WORKSPACE/artifacts/ \;
-          echo "count=$(ls -1 $GITHUB_WORKSPACE/artifacts/*.ipk | wc -l)" >> $GITHUB_OUTPUT
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          find bin -type f -name "*.ipk" -print -exec cp {} "$GITHUB_WORKSPACE/artifacts/" \;
+          echo "count=$(ls -1 "$GITHUB_WORKSPACE/artifacts"/*.ipk 2>/dev/null | wc -l)" >> "$GITHUB_OUTPUT"
 
       - name: Upload artifacts
         if: steps.artifacts.outputs.count != '0'
