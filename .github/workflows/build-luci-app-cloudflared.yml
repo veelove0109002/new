@@ -77,14 +77,19 @@ jobs:
           # Prepare custom package dir
           mkdir -p package/custom/luci-app-cloudflared
 
-      - name: Fetch luci-app-cloudflared source
+      - name: Checkout luci-app-cloudflared source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.luci_app_repo }}
+          ref: ${{ inputs.luci_app_ref }}
+          path: luci-app-cloudflared-src
+
+      - name: Move luci-app-cloudflared into SDK
         working-directory: ${{ env.SDK_DIR }}
         run: |
           set -e
           mkdir -p package/custom/luci-app-cloudflared
-          repo="${{ inputs.luci_app_repo }}"; ref="${{ inputs.luci_app_ref }}"
-          curl -L -o /tmp/src.tar.gz "https://codeload.github.com/${repo}/tar.gz/${ref}"
-          tar -xzf /tmp/src.tar.gz -C package/custom/luci-app-cloudflared --strip-components=1
+          rsync -a --delete "$GITHUB_WORKSPACE/luci-app-cloudflared-src/" package/custom/luci-app-cloudflared/
 
       - name: Configure SDK
         working-directory: ${{ env.SDK_DIR }}
