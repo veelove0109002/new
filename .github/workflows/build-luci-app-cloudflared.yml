@@ -147,7 +147,10 @@ jobs:
           echo "# CONFIG_PACKAGE_uhttpd is not set" >> .config
           echo "# CONFIG_PACKAGE_uhttpd-mod-ubus is not set" >> .config
           echo "# CONFIG_PACKAGE_ucode-mod-lua is not set" >> .config
+          echo "# CONFIG_PACKAGE_ucode-mod-html is not set" >> .config
           echo "# CONFIG_PACKAGE_ucode is not set" >> .config
+          echo "# CONFIG_PACKAGE_lucihttp is not set" >> .config
+          echo "# CONFIG_PACKAGE_rpcd-mod-luci is not set" >> .config
           echo "# CONFIG_PACKAGE_rpcd-mod-ucode is not set" >> .config
           make defconfig
 
