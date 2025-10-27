@@ -80,22 +80,76 @@ jobs:
           # Prepare custom package dir
           mkdir -p package/custom/luci-app-cloudflared
 
-      - name: Fetch luci-app-cloudflared (tarball or repo)
+      - name: Create built-in luci-app-cloudflared (with zh-cn)
         working-directory: ${{ env.SDK_DIR }}
         run: |
           set -e
-          mkdir -p package/custom/luci-app-cloudflared
-          if [ -n "${{ inputs.luci_app_tar }}" ]; then
-            echo "Downloading from tarball: ${{ inputs.luci_app_tar }}"
-            curl -fsSL -o /tmp/src.tar.gz "${{ inputs.luci_app_tar }}"
-            tar -xzf /tmp/src.tar.gz -C package/custom/luci-app-cloudflared --strip-components=1
-          elif [ -n "${{ inputs.luci_app_repo }}" ]; then
-            echo "Cloning repo: ${{ inputs.luci_app_repo }}@${{ inputs.luci_app_ref }}"
-            git clone --depth=1 --branch "${{ inputs.luci_app_ref }}" "https://github.com/${{ inputs.luci_app_repo }}.git" package/custom/luci-app-cloudflared
-          else
-            echo "ERROR: Neither luci_app_tar nor luci_app_repo provided" >&2
-            exit 1
-          fi
+          PKGDIR=package/custom/luci-app-cloudflared
+          mkdir -p "$PKGDIR/luasrc/controller" \
+                   "$PKGDIR/luasrc/model/cbi/cloudflared" \
+                   "$PKGDIR/po/zh-cn" \
+                   "$PKGDIR/root/etc/config"
+
+          cat > "$PKGDIR/Makefile" <<'EOF'
+include $(TOPDIR)/rules.mk
+
+LUCI_TITLE:=LuCI support for Cloudflared
+LUCI_PKGARCH:=all
+LUCI_DEPENDS:=+luci-compat
+PKG_NAME:=luci-app-cloudflared
+PKG_VERSION:=1.0.0
+PKG_RELEASE:=1
+
+include $(TOPDIR)/feeds/luci/luci.mk
+# call BuildPackage - OpenWrt buildroot signature
+EOF
+
+          cat > "$PKGDIR/luasrc/controller/cloudflared.lua" <<'EOF'
+module("luci.controller.cloudflared", package.seeall)
+
+function index()
+  if not nixio.fs.access("/etc/config/cloudflared") then return end
+  entry({"admin","services","cloudflared"}, cbi("cloudflared/config"), _("Cloudflared"), 60).dependent=false
+end
+EOF
+
+          cat > "$PKGDIR/luasrc/model/cbi/cloudflared/config.lua" <<'EOF'
+local m = Map("cloudflared", translate("Cloudflared"), translate("Configure Cloudflare Tunnel client."))
+
+local s = m:section(TypedSection, "cloudflared", translate("General Settings"))
+s.anonymous = true
+
+local o = s:option(Flag, "enabled", translate("Enable"))
+o.rmempty = false
+
+local t = s:option(Value, "token", translate("Tunnel Token"))
+t.password = true
+
+return m
+EOF
+
+          cat > "$PKGDIR/po/zh-cn/cloudflared.po" <<'EOF'
+msgid "Cloudflared"
+msgstr "Cloudflared"
+
+msgid "Configure Cloudflare Tunnel client."
+msgstr "配置 Cloudflare Tunnel 客户端。"
+
+msgid "General Settings"
+msgstr "常规设置"
+
+msgid "Enable"
+msgstr "启用"
+
+msgid "Tunnel Token"
+msgstr "隧道令牌"
+EOF
+
+          cat > "$PKGDIR/root/etc/config/cloudflared" <<'EOF'
+config cloudflared 'config'
+	option enabled '0'
+	option token ''
+EOF
 
       - name: Configure SDK
         working-directory: ${{ env.SDK_DIR }}
@@ -117,14 +171,16 @@ jobs:
         run: |
           set -e
           # Ensure po2lmo tool is available for LuCI translations
-          if ! command -v po2lmo >/dev/null 2>&1; then
-            echo "Building po2lmo..."
-            make package/luci/host/compile V=s || true
-          fi
+          make package/luci/host/compile V=s || true
 
-          # Build the app. LuCI automatically builds i18n packages (e.g., luci-i18n-cloudflared-zh-cn)
+          # Build app and LMO from built-in source
           make package/luci-app-cloudflared/compile V=s -j$(nproc)
-          make package/luci-i18n-cloudflared-zh-cn/compile V=s -j$(nproc) || true
+
+          # Build zh-cn translation
+          if [ -f package/custom/luci-app-cloudflared/po/zh-cn/cloudflared.po ]; then
+            po2lmo package/custom/luci-app-cloudflared/po/zh-cn/cloudflared.po \
+                   package/custom/luci-app-cloudflared/po/zh-cn/cloudflared.zh-cn.lmo || true
+          fi
 
       - name: Collect artifacts
         id: artifacts
