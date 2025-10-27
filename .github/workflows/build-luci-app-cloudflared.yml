@@ -58,6 +58,7 @@ jobs:
           printf "src-git luci https://github.com/openwrt/luci;%s\n" "$FEED_BRANCH" > feeds.conf.default
 
           ./scripts/feeds update luci
+          ./scripts/feeds install -p luci luci-base luci-compat || true
 
       - name: Create built-in luci-app-cloudflared (with zh-cn)
         working-directory: ${{ env.SDK_DIR }}
