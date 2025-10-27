@@ -68,17 +68,22 @@ jobs:
           set -e
           echo "src-git packages https://github.com/openwrt/packages" > feeds.conf.default
           echo "src-git luci https://github.com/openwrt/luci" >> feeds.conf.default
-          echo "src-git routing https://github.com/openwrt/routing" >> feeds.conf.default
-          echo "src-git telephony https://github.com/openwrt/telephony" >> feeds.conf.default
 
-          ./scripts/feeds update -a
-          # Install only needed feeds to avoid missing virtuals warnings
-          ./scripts/feeds install luci base packages telephony || true
+          ./scripts/feeds update packages luci
+          # Install only necessary LuCI packages to satisfy deps
+          ./scripts/feeds install -p luci luci-base luci-compat || true
 
-          # Link cloudflared LuCI app into package dir
+          # Prepare custom package dir
           mkdir -p package/custom/luci-app-cloudflared
-          # Use actions/checkout to avoid https auth prompts
-          git -c advice.detachedHead=false clone --depth=1 --branch "${{ inputs.luci_app_ref }}" https://github.com/${{ inputs.luci_app_repo }} package/custom/luci-app-cloudflared
+
+      - name: Fetch luci-app-cloudflared source
+        working-directory: ${{ env.SDK_DIR }}
+        run: |
+          set -e
+          mkdir -p package/custom/luci-app-cloudflared
+          repo="${{ inputs.luci_app_repo }}"; ref="${{ inputs.luci_app_ref }}"
+          curl -L -o /tmp/src.tar.gz "https://codeload.github.com/${repo}/tar.gz/${ref}"
+          tar -xzf /tmp/src.tar.gz -C package/custom/luci-app-cloudflared --strip-components=1
 
       - name: Configure SDK
         working-directory: ${{ env.SDK_DIR }}
