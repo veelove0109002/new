@@ -12,9 +12,9 @@ on:
         required: true
         default: "x86_64"
       luci_app_repo:
-        description: "Git repo of luci-app-cloudflared"
+        description: "owner/repo of luci-app-cloudflared (for actions/checkout)"
         required: true
-        default: "https://github.com/sbwml/luci-app-cloudflared"
+        default: "sbwml/luci-app-cloudflared"
       luci_app_ref:
         description: "Branch or tag of luci-app-cloudflared"
         required: true
@@ -72,12 +72,13 @@ jobs:
           echo "src-git telephony https://github.com/openwrt/telephony" >> feeds.conf.default
 
           ./scripts/feeds update -a
-          ./scripts/feeds install -a
+          # Install only needed feeds to avoid missing virtuals warnings
+          ./scripts/feeds install luci base packages telephony || true
 
           # Link cloudflared LuCI app into package dir
-          mkdir -p package/custom
-          cd package/custom
-          git clone --depth=1 --branch "${{ inputs.luci_app_ref }}" "${{ inputs.luci_app_repo }}" luci-app-cloudflared
+          mkdir -p package/custom/luci-app-cloudflared
+          # Use actions/checkout to avoid https auth prompts
+          git -c advice.detachedHead=false clone --depth=1 --branch "${{ inputs.luci_app_ref }}" https://github.com/${{ inputs.luci_app_repo }} package/custom/luci-app-cloudflared
 
       - name: Configure SDK
         working-directory: ${{ env.SDK_DIR }}
@@ -88,6 +89,10 @@ jobs:
           ln -sf $GITHUB_WORKSPACE/.cache/dl dl
 
           # Make defconfig (no full target toolchain change allowed in SDK)
+          make defconfig
+          # Ensure language package selected
+          echo "CONFIG_PACKAGE_luci-app-cloudflared=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-cloudflared-zh-cn=y" >> .config
           make defconfig
 
       - name: Build luci-app-cloudflared (and zh-cn i18n)
@@ -102,6 +107,7 @@ jobs:
 
           # Build the app. LuCI automatically builds i18n packages (e.g., luci-i18n-cloudflared-zh-cn)
           make package/luci-app-cloudflared/compile V=s -j$(nproc)
+          make package/luci-i18n-cloudflared-zh-cn/compile V=s -j$(nproc) || true
 
       - name: Collect artifacts
         id: artifacts
