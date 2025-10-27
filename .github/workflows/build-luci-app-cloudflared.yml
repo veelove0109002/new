@@ -59,7 +59,7 @@ jobs:
           printf "src-git luci https://github.com/openwrt/luci;%s\n" "$FEED_BRANCH" >> feeds.conf.default
 
           ./scripts/feeds update -a
-          ./scripts/feeds install -p luci luci-base luci-light luci-compat rpcd-mod-luci cgi-io luci-i18n-base-zh-cn || true
+          ./scripts/feeds install -p luci luci-base luci-compat luci-light luci-mod-admin-full luci-mod-system luci-mod-status luci-lib-ip luci-lib-jsonc luci-lib-nixio rpcd rpcd-mod-luci cgi-io uhttpd uhttpd-mod-ubus luci-i18n-base-zh-cn || true
 
       - name: Create built-in luci-app-cloudflared (with zh-cn)
         working-directory: ${{ env.SDK_DIR }}
@@ -76,7 +76,7 @@ jobs:
             printf '\n'
             printf '%s\n' 'LUCI_TITLE:=LuCI support for Cloudflared'
             printf '%s\n' 'LUCI_PKGARCH:=all'
-            printf '%s\n' 'LUCI_DEPENDS:=+luci-compat'
+            printf '%s\n' 'LUCI_DEPENDS:=+luci-base +luci-compat'
             printf '%s\n' 'PKG_NAME:=luci-app-cloudflared'
             printf '%s\n' 'PKG_VERSION:=1.0.0'
             printf '%s\n' 'PKG_RELEASE:=1'
