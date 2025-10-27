@@ -146,6 +146,9 @@ jobs:
           echo "# CONFIG_PACKAGE_cgi-io is not set" >> .config
           echo "# CONFIG_PACKAGE_uhttpd is not set" >> .config
           echo "# CONFIG_PACKAGE_uhttpd-mod-ubus is not set" >> .config
+          echo "# CONFIG_PACKAGE_ucode-mod-lua is not set" >> .config
+          echo "# CONFIG_PACKAGE_ucode is not set" >> .config
+          echo "# CONFIG_PACKAGE_rpcd-mod-ucode is not set" >> .config
           make defconfig
 
       - name: Build luci-app-cloudflared (and zh-cn i18n)
