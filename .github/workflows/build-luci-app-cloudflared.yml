@@ -58,7 +58,6 @@ jobs:
           printf "src-git luci https://github.com/openwrt/luci;%s\n" "$FEED_BRANCH" > feeds.conf.default
 
           ./scripts/feeds update luci
-          ./scripts/feeds install -p luci luci-base luci-compat || true
 
       - name: Create built-in luci-app-cloudflared (with zh-cn)
         working-directory: ${{ env.SDK_DIR }}
@@ -159,6 +158,7 @@ jobs:
         run: |
           set -e
           make package/luci/host/compile V=s || true
+          make package/luci/compile V=s || true
           make package/luci-app-cloudflared/compile V=s -j"$(nproc)"
           if [ -f package/custom/luci-app-cloudflared/po/zh-cn/cloudflared.po ]; then
             po2lmo package/custom/luci-app-cloudflared/po/zh-cn/cloudflared.po \
