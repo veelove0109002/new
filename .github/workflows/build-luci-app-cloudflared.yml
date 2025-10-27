@@ -144,6 +144,9 @@ jobs:
           make defconfig
           echo "CONFIG_PACKAGE_luci-app-cloudflared=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-cloudflared-zh-cn=y" >> .config
+          echo "# CONFIG_PACKAGE_cgi-io is not set" >> .config
+          echo "# CONFIG_PACKAGE_uhttpd is not set" >> .config
+          echo "# CONFIG_PACKAGE_uhttpd-mod-ubus is not set" >> .config
           make defconfig
 
       - name: Build luci-app-cloudflared (and zh-cn i18n)
