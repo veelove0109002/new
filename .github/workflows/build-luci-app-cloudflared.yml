@@ -12,13 +12,16 @@ on:
         required: true
         default: "x86_64"
       luci_app_repo:
-        description: "owner/repo of luci-app-cloudflared (for actions/checkout)"
-        required: true
-        default: "sbwml/luci-app-cloudflared"
+        description: "owner/repo of luci-app-cloudflared (public repo). Example: someuser/luci-app-cloudflared"
+        required: false
       luci_app_ref:
-        description: "Branch or tag of luci-app-cloudflared"
-        required: true
+        description: "Branch or tag of luci-app-cloudflared (used when luci_app_repo is set)"
+        required: false
         default: "main"
+      luci_app_tar:
+        description: "Optional: Direct tarball URL of luci-app-cloudflared (e.g., https://codeload.github.com/<owner>/<repo>/tar.gz/<ref>)"
+        required: false
+        default: ""
 
 jobs:
   build:
@@ -77,19 +80,22 @@ jobs:
           # Prepare custom package dir
           mkdir -p package/custom/luci-app-cloudflared
 
-      - name: Checkout luci-app-cloudflared source
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ inputs.luci_app_repo }}
-          ref: ${{ inputs.luci_app_ref }}
-          path: luci-app-cloudflared-src
-
-      - name: Move luci-app-cloudflared into SDK
+      - name: Fetch luci-app-cloudflared (tarball or repo)
         working-directory: ${{ env.SDK_DIR }}
         run: |
           set -e
           mkdir -p package/custom/luci-app-cloudflared
-          rsync -a --delete "$GITHUB_WORKSPACE/luci-app-cloudflared-src/" package/custom/luci-app-cloudflared/
+          if [ -n "${{ inputs.luci_app_tar }}" ]; then
+            echo "Downloading from tarball: ${{ inputs.luci_app_tar }}"
+            curl -fsSL -o /tmp/src.tar.gz "${{ inputs.luci_app_tar }}"
+            tar -xzf /tmp/src.tar.gz -C package/custom/luci-app-cloudflared --strip-components=1
+          elif [ -n "${{ inputs.luci_app_repo }}" ]; then
+            echo "Cloning repo: ${{ inputs.luci_app_repo }}@${{ inputs.luci_app_ref }}"
+            git clone --depth=1 --branch "${{ inputs.luci_app_ref }}" "https://github.com/${{ inputs.luci_app_repo }}.git" package/custom/luci-app-cloudflared
+          else
+            echo "ERROR: Neither luci_app_tar nor luci_app_repo provided" >&2
+            exit 1
+          fi
 
       - name: Configure SDK
         working-directory: ${{ env.SDK_DIR }}
