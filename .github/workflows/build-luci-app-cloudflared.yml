@@ -328,12 +328,17 @@ jobs:
             opkg install depends/*.ipk || true
           fi
 
+          echo "卸载所有现有的 cloudflared 相关包..."
+          opkg remove luci-app-cloudflared luci-i18n-cloudflared-zh-cn 2>/dev/null || true
+          # 卸载所有语言包
+          opkg list-installed | grep "luci-i18n-cloudflared" | cut -f1 -d' ' | xargs opkg remove 2>/dev/null || true
+
           echo "安装 Cloudflare Tunnel LuCI 应用..."
           opkg install "$APP_PKG" --force-reinstall || exit 1
 
           if [ -f "$I18N_PKG" ]; then
             echo "安装中文语言包: $I18N_PKG"
-            opkg install "$I18N_PKG" || true
+            opkg install "$I18N_PKG" --force-reinstall || true
           else
             echo "未包含中文语言包，继续安装主程序。"
           fi
@@ -346,9 +351,19 @@ jobs:
 
           refresh_luci
 
+          # 强制清理 LuCI 缓存
+          echo "清理 LuCI 缓存..."
+          rm -rf /tmp/luci-* 2>/dev/null || true
+          rm -rf /var/lib/luci-* 2>/dev/null || true
+          sync
+
+          # 再次刷新 LuCI
+          refresh_luci
+
           # 验证安装结果
           if ls /usr/lib/lua/luci/controller | grep -q 'cloudflared'; then
             echo "✓ 安装完成！请在 LuCI 界面 服务→Cloudflare Tunnel 查看。"
+            echo "如果仍显示旧名称，请刷新浏览器页面或重新登录 LuCI。"
             exit 0
           else
             echo "! 警告：未检测到 Cloudflare Tunnel 控制器文件，可能需刷新浏览器或重新登录 LuCI。"
