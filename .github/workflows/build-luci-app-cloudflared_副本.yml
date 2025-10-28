@@ -113,7 +113,7 @@ jobs:
               printf '%s\n' 'module("luci.controller.cloudflared", package.seeall)'
               printf '%s\n' 'function index()'
               printf '%s\n' '  if not nixio.fs.access("/etc/config/cloudflared") then return end'
-              printf '%s\n' '  entry({"admin","services","cloudflared"}, cbi("cloudflared/config"), _("Cloudflared"), 60).dependent=false'
+              printf '%s\n' '  entry({"admin","services","cloudflared"}, cbi("cloudflared/config"), _("Cloudflare Tunnel"), 60).dependent=false'
               printf '%s\n' 'end'
             } > "$PKGDIR/luasrc/controller/cloudflared.lua"
           fi

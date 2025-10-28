@@ -123,7 +123,8 @@ jobs:
 
           # 修改菜单显示名称为 Cloudflare Tunnel（覆盖 controller、menu.d、前端资源等）
           if [ -f "$PKGDIR/luasrc/controller/cloudflared.lua" ]; then
-            sed -i -E 's/_\(["\'"\']Cloudflared["\'"\']\)/_("Cloudflare Tunnel")/g' "$PKGDIR/luasrc/controller/cloudflared.lua" || true
+            sed -i 's|_\("Cloudflared"\)|_("Cloudflare Tunnel")|g' "$PKGDIR/luasrc/controller/cloudflared.lua" || true
+            sed -i "s|_('Cloudflared')|_\(\"Cloudflare Tunnel\"\)|g" "$PKGDIR/luasrc/controller/cloudflared.lua" || true
           fi
           if ls "$PKGDIR"/root/usr/share/luci/menu.d/*.json >/dev/null 2>&1; then
             sed -i 's|Cloudflare 零信任隧道|Cloudflare Tunnel|g' "$PKGDIR"/root/usr/share/luci/menu.d/*.json || true
