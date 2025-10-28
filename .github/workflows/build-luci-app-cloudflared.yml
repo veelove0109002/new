@@ -96,6 +96,31 @@ jobs:
           if ls "$PKGDIR"/htdocs/luci-static/resources/*.js >/dev/null 2>&1; then
             sed -i 's|admin/vpn/|admin/services/|g' "$PKGDIR"/htdocs/luci-static/resources/*.js || true
           fi
+
+          # 兜底：在整个包目录内替换所有 admin/vpn/ 到 admin/services/
+          if command -v sed >/dev/null 2>&1; then
+            find "$PKGDIR" -type f \( -name "*.json" -o -name "*.lua" -o -name "*.htm" -o -name "*.html" -o -name "*.js" \) -print0 \
+              | xargs -0 sed -i 's|admin/vpn/|admin/services/|g' 2>/dev/null || true
+          fi
+
+          # 如 Makefile 内有旧版分类提示，顺手替换为 Services
+          sed -i 's/>VPN/>Services/g; s/>vpn/>services/g' "$PKGDIR/Makefile" || true
+
+          # 如果既没有 controller 也没有 menu.d，强制创建一个菜单到 服务
+          if [ ! -f "$PKGDIR/luasrc/controller/cloudflared.lua" ] && ! ls "$PKGDIR"/root/usr/share/luci/menu.d/*.json >/dev/null 2>&1; then
+            mkdir -p "$PKGDIR/luasrc/controller"
+            cat > "$PKGDIR/luasrc/controller/cloudflared.lua" <<'EOF'
+module("luci.controller.cloudflared", package.seeall)
+function index()
+  if not nixio.fs.access("/etc/config/cloudflared") then return end
+  entry({"admin","services","cloudflared"}, cbi("cloudflared/config"), _("Cloudflared"), 60).dependent=false
+end
+EOF
+          fi
+
+          # 确保使用我们修改后的本地包而不是 feeds 里的同名包
+          rm -rf package/feeds/luci/luci-app-cloudflared || true
+
           echo "Official luci-app-cloudflared synced from openwrt/luci (openwrt-23.05):"
           grep -E 'PKG_VERSION|PKG_RELEASE|LUCI_TITLE' -n "$PKGDIR/Makefile" || true
           ls -lah "$PKGDIR" | sed -n '1,200p'

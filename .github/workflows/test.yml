@@ -1,0 +1,187 @@
+name: Build luci-app-cloudflared (with zh-cn)
+
+on:
+  workflow_dispatch:
+    inputs:
+      openwrt_sdk:
+        description: OpenWrt SDK tar.xz URL (match your target)
+        required: true
+        default: "https://downloads.openwrt.org/releases/23.05.3/targets/x86/64/openwrt-sdk-23.05.3-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    env:
+      TZ: Asia/Shanghai
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
+            gettext git libncurses5-dev libssl-dev python3 python3-distutils \
+            rsync unzip zlib1g-dev file wget curl ca-certificates \
+            subversion upx-ucl po4a
+
+      - name: Prepare workspace
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.cache/dl"
+          echo "CACHE_DIR=$GITHUB_WORKSPACE/.cache" >> "$GITHUB_ENV"
+
+      - name: Download OpenWrt SDK
+        id: sdk
+        run: |
+          set -e
+          SDK_URL="${{ inputs.openwrt_sdk }}"
+          SDK_ARCHIVE="$(basename "$SDK_URL")"
+          wget -q "$SDK_URL"
+          tar -xf "$SDK_ARCHIVE"
+          SDK_DIR=$(tar -tf "$SDK_ARCHIVE" | head -1 | cut -f1 -d"/")
+          echo "SDK_DIR=$SDK_DIR" >> "$GITHUB_ENV"
+
+      - name: Cache downloads (dl)
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CACHE_DIR }}/dl
+          key: dl-${{ inputs.openwrt_sdk }}
+          restore-keys: |
+            dl-
+
+      - name: Setup SDK feeds (luci only)
+        working-directory: ${{ env.SDK_DIR }}
+        run: |
+          set -e
+          FEED_BRANCH=openwrt-23.05
+          printf "src-git luci https://github.com/openwrt/luci;%s\n" "$FEED_BRANCH" > feeds.conf.default
+
+          ./scripts/feeds update luci
+
+      - name: Create built-in luci-app-cloudflared (with zh-cn)
+        working-directory: ${{ env.SDK_DIR }}
+        run: |
+          set -e
+          PKGDIR=package/custom/luci-app-cloudflared
+          mkdir -p "$PKGDIR/luasrc/controller" \
+                   "$PKGDIR/luasrc/model/cbi/cloudflared" \
+                   "$PKGDIR/po/zh-cn" \
+                   "$PKGDIR/root/etc/config"
+
+          {
+            printf '%s\n' 'include $(TOPDIR)/rules.mk'
+            printf '\n'
+            printf '%s\n' 'LUCI_TITLE:=LuCI support for Cloudflared'
+            printf '%s\n' 'LUCI_PKGARCH:=all'
+            printf '%s\n' 'LUCI_DEPENDS:=+luci-base +luci-compat'
+            printf '%s\n' 'PKG_NAME:=luci-app-cloudflared'
+            printf '%s\n' 'PKG_VERSION:=1.0.0'
+            printf '%s\n' 'PKG_RELEASE:=1'
+            printf '%s\n' 'PKG_LICENSE:=MIT'
+            printf '%s\n' 'PKG_MAINTAINER:=auto-builder'
+            printf '\n'
+            printf '%s\n' 'include $(TOPDIR)/feeds/luci/luci.mk'
+            printf '%s\n' '# call BuildPackage - OpenWrt buildroot signature'
+          } > "$PKGDIR/Makefile"
+
+          {
+            printf '%s\n' 'module("luci.controller.cloudflared", package.seeall)'
+            printf '\n'
+            printf '%s\n' 'function index()'
+            printf '%s\n' '  if not nixio.fs.access("/etc/config/cloudflared") then return end'
+            printf '%s\n' '  entry({"admin","services","cloudflared"}, cbi("cloudflared/config"), _("Cloudflared"), 60).dependent=false'
+            printf '%s\n' 'end'
+          } > "$PKGDIR/luasrc/controller/cloudflared.lua"
+
+          {
+            printf '%s\n' 'local m = Map("cloudflared", translate("Cloudflared"), translate("Configure Cloudflare Tunnel client."))'
+            printf '\n'
+            printf '%s\n' 'local s = m:section(TypedSection, "cloudflared", translate("General Settings"))'
+            printf '%s\n' 's.anonymous = true'
+            printf '\n'
+            printf '%s\n' 'local o = s:option(Flag, "enabled", translate("Enable"))'
+            printf '%s\n' 'o.rmempty = false'
+            printf '\n'
+            printf '%s\n' 'local t = s:option(Value, "token", translate("Tunnel Token"))'
+            printf '%s\n' 't.password = true'
+            printf '\n'
+            printf '%s\n' 'return m'
+          } > "$PKGDIR/luasrc/model/cbi/cloudflared/config.lua"
+
+          {
+            printf '%s\n' 'msgid "Cloudflared"'
+            printf '%s\n' 'msgstr "Cloudflared"'
+            printf '\n'
+            printf '%s\n' 'msgid "Configure Cloudflare Tunnel client."'
+            printf '%s\n' 'msgstr "配置 Cloudflare Tunnel 客户端。"'
+            printf '\n'
+            printf '%s\n' 'msgid "General Settings"'
+            printf '%s\n' 'msgstr "常规设置"'
+            printf '\n'
+            printf '%s\n' 'msgid "Enable"'
+            printf '%s\n' 'msgstr "启用"'
+            printf '\n'
+            printf '%s\n' 'msgid "Tunnel Token"'
+            printf '%s\n' 'msgstr "隧道令牌"'
+          } > "$PKGDIR/po/zh-cn/cloudflared.po"
+
+          {
+            printf '%s\n' "config cloudflared 'config'"
+            printf '%s\n' "  option enabled '0'"
+            printf '%s\n' "  option token ''"
+          } > "$PKGDIR/root/etc/config/cloudflared"
+
+      - name: Configure SDK
+        working-directory: ${{ env.SDK_DIR }}
+        run: |
+          set -e
+          mkdir -p "$GITHUB_WORKSPACE/.cache/dl"
+          ln -sf "$GITHUB_WORKSPACE/.cache/dl" dl
+
+          make defconfig
+          echo "CONFIG_PACKAGE_luci-app-cloudflared=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-cloudflared-zh-cn=y" >> .config
+          echo "# CONFIG_PACKAGE_cgi-io is not set" >> .config
+          echo "# CONFIG_PACKAGE_uhttpd is not set" >> .config
+          echo "# CONFIG_PACKAGE_uhttpd-mod-ubus is not set" >> .config
+          echo "# CONFIG_PACKAGE_ucode-mod-lua is not set" >> .config
+          echo "# CONFIG_PACKAGE_ucode-mod-html is not set" >> .config
+          echo "# CONFIG_PACKAGE_ucode is not set" >> .config
+          echo "# CONFIG_PACKAGE_lucihttp is not set" >> .config
+          echo "# CONFIG_PACKAGE_rpcd-mod-luci is not set" >> .config
+          echo "# CONFIG_PACKAGE_rpcd-mod-ucode is not set" >> .config
+          make defconfig
+
+      - name: Build luci-app-cloudflared (and zh-cn i18n)
+        working-directory: ${{ env.SDK_DIR }}
+        run: |
+          set -e
+          make package/luci/host/compile V=s || true
+          make package/luci/compile V=s || true
+          make package/luci-app-cloudflared/compile V=s -j"$(nproc)"
+          if [ -f package/custom/luci-app-cloudflared/po/zh-cn/cloudflared.po ]; then
+            po2lmo package/custom/luci-app-cloudflared/po/zh-cn/cloudflared.po \
+              package/custom/luci-app-cloudflared/po/zh-cn/cloudflared.zh-cn.lmo || true
+          fi
+
+      - name: Collect artifacts
+        id: artifacts
+        working-directory: ${{ env.SDK_DIR }}
+        run: |
+          set -e
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          find bin -type f -name "*.ipk" -print -exec cp {} "$GITHUB_WORKSPACE/artifacts/" \;
+          echo "count=$(ls -1 "$GITHUB_WORKSPACE/artifacts"/*.ipk 2>/dev/null | wc -l)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifacts
+        if: steps.artifacts.outputs.count != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: luci-app-cloudflared-ipks-${{ github.run_id }}
+          path: artifacts/*.ipk
+          if-no-files-found: error
+
+      - name: Show result summary
+        run: |
+          echo "Built IPKs:" && ls -lh artifacts || true
