@@ -184,19 +184,58 @@ jobs:
           fi
           echo "ARCH_MAP=${ARCH_MAP}" >> "$GITHUB_ENV"
 
-      - name: Final text replacement before build
+      - name: Modify language files before build
         working-directory: ${{ env.SDK_DIR }}
         run: |
           set -e
           PKGDIR=package/custom/luci-app-cloudflared
           if [ -d "$PKGDIR" ]; then
-            echo "执行最终文本替换..."
-            # 强制替换所有文件中的文本
-            find "$PKGDIR" -type f \( -name "*.lua" -o -name "*.json" -o -name "*.htm" -o -name "*.html" -o -name "*.js" -o -name "*.cbi" -o -name "*.txt" -o -name "*.md" \) -exec sed -i 's|Cloudflare 零信任隧道|Cloudflare Tunnel|g' {} \; 2>/dev/null || true
-            find "$PKGDIR" -type f \( -name "*.lua" -o -name "*.json" -o -name "*.htm" -o -name "*.html" -o -name "*.js" -o -name "*.cbi" -o -name "*.txt" -o -name "*.md" \) -exec sed -i 's|Cloudflared|Cloudflare Tunnel|g' {} \; 2>/dev/null || true
-            echo "文本替换完成，检查结果："
-            grep -r "Cloudflare Tunnel" "$PKGDIR" | head -5 || true
-            grep -r "Cloudflare 零信任隧道" "$PKGDIR" | head -5 || true
+            echo "修改语言包文件..."
+            
+            # 查找并修改所有 .po 文件（翻译源文件）
+            find "$PKGDIR" -name "*.po" -type f | while read pofile; do
+              echo "处理语言文件: $pofile"
+              # 替换 msgstr 中的文本
+              sed -i 's|msgstr "Cloudflare 零信任隧道"|msgstr "Cloudflare Tunnel"|g' "$pofile" || true
+              sed -i 's|msgstr "Cloudflared"|msgstr "Cloudflare Tunnel"|g' "$pofile" || true
+              # 替换 msgid 中的文本（如果需要）
+              sed -i 's|msgid "Cloudflare 零信任隧道"|msgid "Cloudflare Tunnel"|g' "$pofile" || true
+              sed -i 's|msgid "Cloudflared"|msgid "Cloudflare Tunnel"|g' "$pofile" || true
+            done
+            
+            # 查找并修改所有 .lua 文件中的翻译函数
+            find "$PKGDIR" -name "*.lua" -type f | while read luafile; do
+              echo "处理 Lua 文件: $luafile"
+              # 替换 _() 函数中的文本
+              sed -i 's|_("Cloudflare 零信任隧道")|_("Cloudflare Tunnel")|g' "$luafile" || true
+              sed -i 's|_("Cloudflared")|_("Cloudflare Tunnel")|g' "$luafile" || true
+              sed -i "s|_('Cloudflare 零信任隧道')|_('Cloudflare Tunnel')|g" "$luafile" || true
+              sed -i "s|_('Cloudflared')|_('Cloudflare Tunnel')|g" "$luafile" || true
+            done
+            
+            # 查找并修改所有 .json 文件
+            find "$PKGDIR" -name "*.json" -type f | while read jsonfile; do
+              echo "处理 JSON 文件: $jsonfile"
+              sed -i 's|"Cloudflare 零信任隧道"|"Cloudflare Tunnel"|g' "$jsonfile" || true
+              sed -i 's|"Cloudflared"|"Cloudflare Tunnel"|g' "$jsonfile" || true
+            done
+            
+            # 查找并修改所有 .htm 文件
+            find "$PKGDIR" -name "*.htm" -type f | while read htmfile; do
+              echo "处理 HTML 文件: $htmfile"
+              sed -i 's|Cloudflare 零信任隧道|Cloudflare Tunnel|g' "$htmfile" || true
+              sed -i 's|Cloudflared|Cloudflare Tunnel|g' "$htmfile" || true
+            done
+            
+            echo "语言文件修改完成，检查结果："
+            echo "=== 检查 .po 文件 ==="
+            find "$PKGDIR" -name "*.po" -exec grep -l "Cloudflare Tunnel" {} \; | head -3 || true
+            echo "=== 检查 .lua 文件 ==="
+            find "$PKGDIR" -name "*.lua" -exec grep -l "Cloudflare Tunnel" {} \; | head -3 || true
+            echo "=== 检查 .json 文件 ==="
+            find "$PKGDIR" -name "*.json" -exec grep -l "Cloudflare Tunnel" {} \; | head -3 || true
+            echo "=== 检查 .htm 文件 ==="
+            find "$PKGDIR" -name "*.htm" -exec grep -l "Cloudflare Tunnel" {} \; | head -3 || true
           fi
 
       - name: Build luci-app-cloudflared (and zh-cn i18n)
@@ -327,11 +366,6 @@ jobs:
             echo "安装依赖包..."
             opkg install depends/*.ipk || true
           fi
-
-          echo "卸载所有现有的 cloudflared 相关包..."
-          opkg remove luci-app-cloudflared luci-i18n-cloudflared-zh-cn 2>/dev/null || true
-          # 卸载所有语言包
-          opkg list-installed | grep "luci-i18n-cloudflared" | cut -f1 -d' ' | xargs opkg remove 2>/dev/null || true
 
           echo "安装 Cloudflare Tunnel LuCI 应用..."
           opkg install "$APP_PKG" --force-reinstall || exit 1
