@@ -90,12 +90,12 @@ jobs:
             printf '\n'
             printf '%s\n' 'function index()'
             printf '%s\n' '  if not nixio.fs.access("/etc/config/cloudflared") then return end'
-            printf '%s\n' '  entry({"admin","services","cloudflared"}, cbi("cloudflared/config"), _("Cloudflared"), 60).dependent=false'
+            printf '%s\n' '  entry({"admin","services","cloudflared"}, cbi("cloudflared/config"), _("Cloudflare Tunnel"), 60).dependent=false'
             printf '%s\n' 'end'
           } > "$PKGDIR/luasrc/controller/cloudflared.lua"
 
           {
-            printf '%s\n' 'local m = Map("cloudflared", translate("Cloudflared"), translate("Configure Cloudflare Tunnel client."))'
+            printf '%s\n' 'local m = Map("cloudflared", translate("Cloudflare Tunnel"), translate("Configure Cloudflare Tunnel client."))'
             printf '\n'
             printf '%s\n' 'local s = m:section(TypedSection, "cloudflared", translate("General Settings"))'
             printf '%s\n' 's.anonymous = true'
@@ -110,8 +110,8 @@ jobs:
           } > "$PKGDIR/luasrc/model/cbi/cloudflared/config.lua"
 
           {
-            printf '%s\n' 'msgid "Cloudflared"'
-            printf '%s\n' 'msgstr "Cloudflared"'
+            printf '%s\n' 'msgid "Cloudflare Tunnel"'
+            printf '%s\n' 'msgstr "Cloudflare Tunnel"'
             printf '\n'
             printf '%s\n' 'msgid "Configure Cloudflare Tunnel client."'
             printf '%s\n' 'msgstr "配置 Cloudflare Tunnel 客户端。"'
