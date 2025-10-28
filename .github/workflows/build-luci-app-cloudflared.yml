@@ -125,6 +125,7 @@ jobs:
           if [ -f "$PKGDIR/luasrc/controller/cloudflared.lua" ]; then
             sed -i 's|_\("Cloudflared"\)|_("Cloudflare Tunnel")|g' "$PKGDIR/luasrc/controller/cloudflared.lua" || true
             sed -i "s|_('Cloudflared')|_\(\"Cloudflare Tunnel\"\)|g" "$PKGDIR/luasrc/controller/cloudflared.lua" || true
+            sed -i 's|Cloudflare 零信任隧道|Cloudflare Tunnel|g' "$PKGDIR/luasrc/controller/cloudflared.lua" || true
           fi
           if ls "$PKGDIR"/root/usr/share/luci/menu.d/*.json >/dev/null 2>&1; then
             sed -i 's|Cloudflare 零信任隧道|Cloudflare Tunnel|g' "$PKGDIR"/root/usr/share/luci/menu.d/*.json || true
@@ -133,6 +134,8 @@ jobs:
           # 广泛替换包内其它可能出现的标题
           find "$PKGDIR" -type f \( -name "*.lua" -o -name "*.json" -o -name "*.htm" -o -name "*.html" -o -name "*.js" \) -print0 \
             | xargs -0 sed -i 's|Cloudflare 零信任隧道|Cloudflare Tunnel|g' 2>/dev/null || true
+          find "$PKGDIR" -type f \( -name "*.lua" -o -name "*.json" -o -name "*.htm" -o -name "*.html" -o -name "*.js" \) -print0 \
+            | xargs -0 sed -i 's|Cloudflared|Cloudflare Tunnel|g' 2>/dev/null || true
 
           echo "Official luci-app-cloudflared synced from openwrt/luci (openwrt-23.05):"
           grep -E 'PKG_VERSION|PKG_RELEASE|LUCI_TITLE' -n "$PKGDIR/Makefile" || true
@@ -303,7 +306,7 @@ jobs:
             opkg install depends/*.ipk || true
           fi
 
-          echo "安装 Cloudflared LuCI 应用..."
+          echo "安装 Cloudflare Tunnel LuCI 应用..."
           opkg install "$APP_PKG" --force-reinstall || exit 1
 
           if [ -f "$I18N_PKG" ]; then
@@ -323,10 +326,10 @@ jobs:
 
           # 验证安装结果
           if ls /usr/lib/lua/luci/controller | grep -q 'cloudflared'; then
-            echo "✓ 安装完成！请在 LuCI 界面 服务→Cloudflared 查看。"
+            echo "✓ 安装完成！请在 LuCI 界面 服务→Cloudflare Tunnel 查看。"
             exit 0
           else
-            echo "! 警告：未检测到 Cloudflared 控制器文件，可能需刷新浏览器或重新登录 LuCI。"
+            echo "! 警告：未检测到 Cloudflare Tunnel 控制器文件，可能需刷新浏览器或重新登录 LuCI。"
             exit 0
           fi
           EOF
@@ -378,6 +381,6 @@ jobs:
             1. 下载 `Cloudflared_${{ steps.parsever.outputs.appver }}_${{ env.ARCH_MAP }}_all_sdk_${{ env.SDK_VER }}.run` 到路由器
             2. 执行 `chmod +x Cloudflared_${{ steps.parsever.outputs.appver }}_${{ env.ARCH_MAP }}_all_sdk_${{ env.SDK_VER }}.run && ./Cloudflared_${{
               steps.parsever.outputs.appver }}_${{ env.ARCH_MAP }}_all_sdk_${{ env.SDK_VER }}.run`
-            3. 完成后，在 LuCI 界面中访问 服务→Cloudflared
+            3. 完成后，在 LuCI 界面中访问 服务→Cloudflare Tunnel
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
