@@ -1,4 +1,4 @@
-name: Build luci-app-cloudflared .run (with zh-cn)
+name: Build backup
 
 on:
   workflow_dispatch:
@@ -120,18 +120,6 @@ jobs:
 
           # 确保使用我们修改后的本地包而不是 feeds 里的同名包
           rm -rf package/feeds/luci/luci-app-cloudflared || true
-
-          # 修改菜单显示名称为 Cloudflare Tunnel（覆盖 controller、menu.d、前端资源等）
-          if [ -f "$PKGDIR/luasrc/controller/cloudflared.lua" ]; then
-            sed -i -E 's/_\(["\'"\']Cloudflared["\'"\']\)/_("Cloudflare Tunnel")/g' "$PKGDIR/luasrc/controller/cloudflared.lua" || true
-          fi
-          if ls "$PKGDIR"/root/usr/share/luci/menu.d/*.json >/dev/null 2>&1; then
-            sed -i 's|Cloudflare 零信任隧道|Cloudflare Tunnel|g' "$PKGDIR"/root/usr/share/luci/menu.d/*.json || true
-            sed -i 's|Cloudflared|Cloudflare Tunnel|g' "$PKGDIR"/root/usr/share/luci/menu.d/*.json || true
-          fi
-          # 广泛替换包内其它可能出现的标题
-          find "$PKGDIR" -type f \( -name "*.lua" -o -name "*.json" -o -name "*.htm" -o -name "*.html" -o -name "*.js" \) -print0 \
-            | xargs -0 sed -i 's|Cloudflare 零信任隧道|Cloudflare Tunnel|g' 2>/dev/null || true
 
           echo "Official luci-app-cloudflared synced from openwrt/luci (openwrt-23.05):"
           grep -E 'PKG_VERSION|PKG_RELEASE|LUCI_TITLE' -n "$PKGDIR/Makefile" || true
