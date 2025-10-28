@@ -131,10 +131,17 @@ jobs:
             sed -i 's|Cloudflare 零信任隧道|Cloudflare Tunnel|g' "$PKGDIR"/root/usr/share/luci/menu.d/*.json || true
             sed -i 's|Cloudflared|Cloudflare Tunnel|g' "$PKGDIR"/root/usr/share/luci/menu.d/*.json || true
           fi
-          # 广泛替换包内其它可能出现的标题
-          find "$PKGDIR" -type f \( -name "*.lua" -o -name "*.json" -o -name "*.htm" -o -name "*.html" -o -name "*.js" \) -print0 \
+          
+          # 替换所有可能的文件类型和位置
+          find "$PKGDIR" -type f \( -name "*.lua" -o -name "*.json" -o -name "*.htm" -o -name "*.html" -o -name "*.js" -o -name "*.cbi" -o -name "*.txt" -o -name "*.md" \) -print0 \
             | xargs -0 sed -i 's|Cloudflare 零信任隧道|Cloudflare Tunnel|g' 2>/dev/null || true
-          find "$PKGDIR" -type f \( -name "*.lua" -o -name "*.json" -o -name "*.htm" -o -name "*.html" -o -name "*.js" \) -print0 \
+          find "$PKGDIR" -type f \( -name "*.lua" -o -name "*.json" -o -name "*.htm" -o -name "*.html" -o -name "*.js" -o -name "*.cbi" -o -name "*.txt" -o -name "*.md" \) -print0 \
+            | xargs -0 sed -i 's|Cloudflared|Cloudflare Tunnel|g' 2>/dev/null || true
+          
+          # 特别处理可能的模板文件
+          find "$PKGDIR" -type f -name "*.htm" -print0 \
+            | xargs -0 sed -i 's|Cloudflare 零信任隧道|Cloudflare Tunnel|g' 2>/dev/null || true
+          find "$PKGDIR" -type f -name "*.htm" -print0 \
             | xargs -0 sed -i 's|Cloudflared|Cloudflare Tunnel|g' 2>/dev/null || true
 
           echo "Official luci-app-cloudflared synced from openwrt/luci (openwrt-23.05):"
@@ -176,6 +183,21 @@ jobs:
             ARCH_MAP="${TGT}_${SUB}"
           fi
           echo "ARCH_MAP=${ARCH_MAP}" >> "$GITHUB_ENV"
+
+      - name: Final text replacement before build
+        working-directory: ${{ env.SDK_DIR }}
+        run: |
+          set -e
+          PKGDIR=package/custom/luci-app-cloudflared
+          if [ -d "$PKGDIR" ]; then
+            echo "执行最终文本替换..."
+            # 强制替换所有文件中的文本
+            find "$PKGDIR" -type f \( -name "*.lua" -o -name "*.json" -o -name "*.htm" -o -name "*.html" -o -name "*.js" -o -name "*.cbi" -o -name "*.txt" -o -name "*.md" \) -exec sed -i 's|Cloudflare 零信任隧道|Cloudflare Tunnel|g' {} \; 2>/dev/null || true
+            find "$PKGDIR" -type f \( -name "*.lua" -o -name "*.json" -o -name "*.htm" -o -name "*.html" -o -name "*.js" -o -name "*.cbi" -o -name "*.txt" -o -name "*.md" \) -exec sed -i 's|Cloudflared|Cloudflare Tunnel|g' {} \; 2>/dev/null || true
+            echo "文本替换完成，检查结果："
+            grep -r "Cloudflare Tunnel" "$PKGDIR" | head -5 || true
+            grep -r "Cloudflare 零信任隧道" "$PKGDIR" | head -5 || true
+          fi
 
       - name: Build luci-app-cloudflared (and zh-cn i18n)
         working-directory: ${{ env.SDK_DIR }}
