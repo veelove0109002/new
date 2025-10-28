@@ -109,13 +109,13 @@ jobs:
           # 如果既没有 controller 也没有 menu.d，强制创建一个菜单到 服务
           if [ ! -f "$PKGDIR/luasrc/controller/cloudflared.lua" ] && ! ls "$PKGDIR"/root/usr/share/luci/menu.d/*.json >/dev/null 2>&1; then
             mkdir -p "$PKGDIR/luasrc/controller"
-            cat > "$PKGDIR/luasrc/controller/cloudflared.lua" <<'EOF'
-module("luci.controller.cloudflared", package.seeall)
-function index()
-  if not nixio.fs.access("/etc/config/cloudflared") then return end
-  entry({"admin","services","cloudflared"}, cbi("cloudflared/config"), _("Cloudflared"), 60).dependent=false
-end
-EOF
+            {
+              printf '%s\n' 'module("luci.controller.cloudflared", package.seeall)'
+              printf '%s\n' 'function index()'
+              printf '%s\n' '  if not nixio.fs.access("/etc/config/cloudflared") then return end'
+              printf '%s\n' '  entry({"admin","services","cloudflared"}, cbi("cloudflared/config"), _("Cloudflared"), 60).dependent=false'
+              printf '%s\n' 'end'
+            } > "$PKGDIR/luasrc/controller/cloudflared.lua"
           fi
 
           # 确保使用我们修改后的本地包而不是 feeds 里的同名包

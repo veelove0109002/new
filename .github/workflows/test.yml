@@ -1,4 +1,4 @@
-name: Build luci-app-cloudflared (with zh-cn)
+name: Build 
 
 on:
   workflow_dispatch:
