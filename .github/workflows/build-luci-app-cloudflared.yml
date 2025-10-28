@@ -1,4 +1,4 @@
-name: Build luci-app-cloudflared (with zh-cn)
+name: Build luci-app-cloudflared .run (with zh-cn)
 
 on:
   workflow_dispatch:
@@ -8,14 +8,22 @@ on:
         required: true
         default: "https://downloads.openwrt.org/releases/23.05.3/targets/x86/64/openwrt-sdk-23.05.3-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-22.04
     env:
       TZ: Asia/Shanghai
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Get date
+        id: date
+        run: echo "date=$(date)" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
         run: |
@@ -24,11 +32,12 @@ jobs:
             build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
             gettext git libncurses5-dev libssl-dev python3 python3-distutils \
             rsync unzip zlib1g-dev file wget curl ca-certificates \
-            subversion upx-ucl po4a
+            subversion upx-ucl po4a jq makeself
 
       - name: Prepare workspace
         run: |
           mkdir -p "$GITHUB_WORKSPACE/.cache/dl"
+          mkdir -p "$GITHUB_WORKSPACE/artifacts" "staging"
           echo "CACHE_DIR=$GITHUB_WORKSPACE/.cache" >> "$GITHUB_ENV"
 
       - name: Download OpenWrt SDK
@@ -41,6 +50,10 @@ jobs:
           tar -xf "$SDK_ARCHIVE"
           SDK_DIR=$(tar -tf "$SDK_ARCHIVE" | head -1 | cut -f1 -d"/")
           echo "SDK_DIR=$SDK_DIR" >> "$GITHUB_ENV"
+
+          # 解析 SDK 版本（用于命名），ARCH_MAP 将在 .config 中自动检测
+          SDK_VER="$(echo "$SDK_ARCHIVE" | sed -E 's/^openwrt-sdk-([^-]+).*/\1/')"
+          echo "SDK_VER=$SDK_VER" >> "$GITHUB_ENV"
 
       - name: Cache downloads (dl)
         uses: actions/cache@v4
@@ -56,81 +69,25 @@ jobs:
           set -e
           FEED_BRANCH=openwrt-23.05
           printf "src-git luci https://github.com/openwrt/luci;%s\n" "$FEED_BRANCH" > feeds.conf.default
-
           ./scripts/feeds update luci
+          ./scripts/feeds install -a -p luci
 
-      - name: Create built-in luci-app-cloudflared (with zh-cn)
+      - name: Fetch official luci-app-cloudflared from openwrt/luci (openwrt-23.05)
         working-directory: ${{ env.SDK_DIR }}
         run: |
           set -e
           PKGDIR=package/custom/luci-app-cloudflared
-          mkdir -p "$PKGDIR/luasrc/controller" \
-                   "$PKGDIR/luasrc/model/cbi/cloudflared" \
-                   "$PKGDIR/po/zh-cn" \
-                   "$PKGDIR/root/etc/config"
-
-          {
-            printf '%s\n' 'include $(TOPDIR)/rules.mk'
-            printf '\n'
-            printf '%s\n' 'LUCI_TITLE:=LuCI support for Cloudflared'
-            printf '%s\n' 'LUCI_PKGARCH:=all'
-            printf '%s\n' 'LUCI_DEPENDS:=+luci-base +luci-compat'
-            printf '%s\n' 'PKG_NAME:=luci-app-cloudflared'
-            printf '%s\n' 'PKG_VERSION:=1.0.0'
-            printf '%s\n' 'PKG_RELEASE:=1'
-            printf '%s\n' 'PKG_LICENSE:=MIT'
-            printf '%s\n' 'PKG_MAINTAINER:=auto-builder'
-            printf '\n'
-            printf '%s\n' 'include $(TOPDIR)/feeds/luci/luci.mk'
-            printf '%s\n' '# call BuildPackage - OpenWrt buildroot signature'
-          } > "$PKGDIR/Makefile"
-
-          {
-            printf '%s\n' 'module("luci.controller.cloudflared", package.seeall)'
-            printf '\n'
-            printf '%s\n' 'function index()'
-            printf '%s\n' '  if not nixio.fs.access("/etc/config/cloudflared") then return end'
-            printf '%s\n' '  entry({"admin","services","cloudflared"}, cbi("cloudflared/config"), _("Cloudflared"), 60).dependent=false'
-            printf '%s\n' 'end'
-          } > "$PKGDIR/luasrc/controller/cloudflared.lua"
-
-          {
-            printf '%s\n' 'local m = Map("cloudflared", translate("Cloudflared"), translate("Configure Cloudflare Tunnel client."))'
-            printf '\n'
-            printf '%s\n' 'local s = m:section(TypedSection, "cloudflared", translate("General Settings"))'
-            printf '%s\n' 's.anonymous = true'
-            printf '\n'
-            printf '%s\n' 'local o = s:option(Flag, "enabled", translate("Enable"))'
-            printf '%s\n' 'o.rmempty = false'
-            printf '\n'
-            printf '%s\n' 'local t = s:option(Value, "token", translate("Tunnel Token"))'
-            printf '%s\n' 't.password = true'
-            printf '\n'
-            printf '%s\n' 'return m'
-          } > "$PKGDIR/luasrc/model/cbi/cloudflared/config.lua"
-
-          {
-            printf '%s\n' 'msgid "Cloudflared"'
-            printf '%s\n' 'msgstr "Cloudflared"'
-            printf '\n'
-            printf '%s\n' 'msgid "Configure Cloudflare Tunnel client."'
-            printf '%s\n' 'msgstr "配置 Cloudflare Tunnel 客户端。"'
-            printf '\n'
-            printf '%s\n' 'msgid "General Settings"'
-            printf '%s\n' 'msgstr "常规设置"'
-            printf '\n'
-            printf '%s\n' 'msgid "Enable"'
-            printf '%s\n' 'msgstr "启用"'
-            printf '\n'
-            printf '%s\n' 'msgid "Tunnel Token"'
-            printf '%s\n' 'msgstr "隧道令牌"'
-          } > "$PKGDIR/po/zh-cn/cloudflared.po"
-
-          {
-            printf '%s\n' "config cloudflared 'config'"
-            printf '%s\n' "  option enabled '0'"
-            printf '%s\n' "  option token ''"
-          } > "$PKGDIR/root/etc/config/cloudflared"
+          TMP_LUCI="$(mktemp -d)"
+          git clone https://github.com/openwrt/luci "$TMP_LUCI"
+          git -C "$TMP_LUCI" checkout -q openwrt-23.05 || true
+          rm -rf "$PKGDIR"
+          mkdir -p "$PKGDIR"
+          rsync -a "$TMP_LUCI/applications/luci-app-cloudflared/" "$PKGDIR/"
+          # 修正 luci.mk 包含路径，适配 package/custom 位置
+          sed -i 's|^include \.\./\.\./luci\.mk|include $(TOPDIR)/feeds/luci/luci.mk|' "$PKGDIR/Makefile"
+          echo "Official luci-app-cloudflared synced from openwrt/luci (openwrt-23.05):"
+          grep -E 'PKG_VERSION|PKG_RELEASE|LUCI_TITLE' -n "$PKGDIR/Makefile" || true
+          ls -lah "$PKGDIR" | sed -n '1,200p'
 
       - name: Configure SDK
         working-directory: ${{ env.SDK_DIR }}
@@ -153,35 +110,225 @@ jobs:
           echo "# CONFIG_PACKAGE_rpcd-mod-ucode is not set" >> .config
           make defconfig
 
+          # 从 .config 自动检测目标架构（如 x86_64）
+          TGT="$(grep -E '^CONFIG_TARGET_[^=]+_=y' .config | sed -E 's/^CONFIG_TARGET_([a-z0-9]+)_=y/\1/' | head -n1 || true)"
+          SUB="$(grep -E '^CONFIG_TARGET_[^=]+_[^=]+=y' .config | sed -E 's/^CONFIG_TARGET_([a-z0-9]+)_([a-z0-9_]+)=y/\2/' | head -n1 || true)"
+          if [ -z "$TGT" ] || [ -z "$SUB" ]; then
+            if grep -q '^CONFIG_TARGET_x86=y' .config && grep -q '^CONFIG_TARGET_x86_64=y' .config; then
+              TGT="x86"; SUB="64"
+            fi
+          fi
+          if [ "$TGT" = "x86" ] && [ "$SUB" = "64" ]; then
+            ARCH_MAP="x86_64"
+          else
+            ARCH_MAP="${TGT}_${SUB}"
+          fi
+          echo "ARCH_MAP=${ARCH_MAP}" >> "$GITHUB_ENV"
+
       - name: Build luci-app-cloudflared (and zh-cn i18n)
         working-directory: ${{ env.SDK_DIR }}
         run: |
           set -e
-          make package/luci/host/compile V=s || true
-          make package/luci/compile V=s || true
+          # 先准备 luci-base 的 host 工具（包含 po2lmo）
+          make package/feeds/luci/luci-base/host/compile V=s || true
+          # 编译应用（luci.mk 会自动处理 .po -> .lmo）
           make package/luci-app-cloudflared/compile V=s -j"$(nproc)"
-          if [ -f package/custom/luci-app-cloudflared/po/zh-cn/cloudflared.po ]; then
-            po2lmo package/custom/luci-app-cloudflared/po/zh-cn/cloudflared.po \
-              package/custom/luci-app-cloudflared/po/zh-cn/cloudflared.zh-cn.lmo || true
-          fi
 
-      - name: Collect artifacts
-        id: artifacts
+      - name: Collect IPK artifacts
+        id: ipk
         working-directory: ${{ env.SDK_DIR }}
         run: |
           set -e
           mkdir -p "$GITHUB_WORKSPACE/artifacts"
           find bin -type f -name "*.ipk" -print -exec cp {} "$GITHUB_WORKSPACE/artifacts/" \;
           echo "count=$(ls -1 "$GITHUB_WORKSPACE/artifacts"/*.ipk 2>/dev/null | wc -l)" >> "$GITHUB_OUTPUT"
+          echo "SDK_BIN_DIR=$(pwd)/bin" >> "$GITHUB_ENV"
+          echo "COPIED_TO=$GITHUB_WORKSPACE/artifacts" >> "$GITHUB_ENV"
+          echo "IPK_LIST:" && ls -lh "$GITHUB_WORKSPACE/artifacts" || true
 
-      - name: Upload artifacts
-        if: steps.artifacts.outputs.count != '0'
+      - name: Locate app and zh-cn i18n (optional)
+        id: locate
+        run: |
+          set -e
+          APP_PKG="$(find artifacts -type f -name '*luci-app-cloudflared*.ipk' | head -n1 || true)"
+          I18N_PKG="$(find artifacts -type f -name '*luci-i18n-cloudflared-zh-cn*.ipk' | head -n1 || true)"
+          if [ -z "$APP_PKG" ]; then
+            echo "未找到 luci-app-cloudflared 顶层包"
+            ls -lh artifacts || true
+            exit 1
+          fi
+          if [ -z "$I18N_PKG" ]; then
+            echo "警告: 未找到 zh-cn 语言包（将继续，仅不包含中文翻译）"
+          fi
+          echo "APP_PKG_PATH=$APP_PKG" >> "$GITHUB_ENV"
+          [ -n "$I18N_PKG" ] && echo "I18N_PKG_PATH=$I18N_PKG" >> "$GITHUB_ENV"
+          echo "app_path=$APP_PKG" >> "$GITHUB_OUTPUT"
+          [ -n "$I18N_PKG" ] && echo "i18n_path=$I18N_PKG" >> "$GITHUB_OUTPUT"
+          ls -lh "$APP_PKG" || true
+          [ -n "$I18N_PKG" ] && ls -lh "$I18N_PKG" || true
+
+      - name: Parse version from luci-app-cloudflared ipk
+        id: parsever
+        run: |
+          set -e
+          BASE="$(basename "${APP_PKG_PATH:-${{ steps.locate.outputs.app_path }}}")"
+          APPVER="$(echo "$BASE" | sed -E 's/^.*luci-app-cloudflared_([^_]+).*\.ipk$/\1/')"
+          [ -z "$APPVER" ] && APPVER="1.0.0"
+          echo "appver=$APPVER" >> "$GITHUB_OUTPUT"
+          echo "APP_VERSION=$APPVER" >> "$GITHUB_ENV"
+
+      - name: Build Makeself installer (.run)
+        run: |
+          set -e
+          ARCH_MAP="${ARCH_MAP:?need ARCH_MAP}"
+          APP_VERSION="${APP_VERSION:-${{ steps.parsever.outputs.appver }}}"
+          APP_PKG_PATH="${APP_PKG_PATH:-${{ steps.locate.outputs.app_path }}}"
+          I18N_PKG_PATH="${I18N_PKG_PATH:-${{ steps.locate.outputs.i18n_path }}}"
+          SDK_VER="${SDK_VER:-unknown}"
+
+          STAGING_ROOT="staging"
+          STAGING_DIR="$STAGING_ROOT/$ARCH_MAP"
+          DEP_DIR="$STAGING_DIR/depends"
+          rm -rf "$STAGING_DIR"
+          mkdir -p "$DEP_DIR"
+
+          APP_BASE="$(basename "$APP_PKG_PATH")"
+          I18N_BASE="$(basename "$I18N_PKG_PATH")"
+          cp -f "$APP_PKG_PATH" "$STAGING_DIR/$APP_BASE"
+          cp -f "$APP_PKG_PATH" "$STAGING_DIR/luci-app-cloudflared.ipk"
+          if [ -n "$I18N_PKG_PATH" ]; then
+            cp -f "$I18N_PKG_PATH" "$STAGING_DIR/$I18N_BASE"
+            cp -f "$I18N_PKG_PATH" "$STAGING_DIR/luci-i18n-cloudflared-zh-cn.ipk"
+          fi
+
+          # 若存在其它依赖 ipk（通常无），归入 depends
+          while IFS= read -r -d '' f; do
+            b="$(basename "$f")"
+            case "$b" in
+              "$APP_BASE"|"$(basename "$I18N_PKG_PATH")") continue ;;
+            esac
+            cp -f "$f" "$DEP_DIR/$b"
+          done < <(find artifacts -type f -name '*.ipk' -print0)
+
+          # 安装脚本，参考 passwall.yml 的温和刷新逻辑
+          cat > "$STAGING_DIR/install.sh" <<'EOF'
+          #!/bin/sh
+          set -e
+
+          refresh_luci() {
+            rm -f /tmp/luci-indexcache 2>/dev/null || true
+            rm -rf /tmp/luci-modulecache/* 2>/dev/null || true
+            if command -v luci-reload >/dev/null 2>&1; then
+              luci-reload 2>/dev/null || true
+            else
+              if command -v lua >/dev/null 2>&1; then
+                lua -e 'local ok,d=pcall(require,"luci.dispatcher"); if ok and d then if d.rebuild_index then d.rebuild_index() elseif d.createindex then d.createindex() end end' 2>/dev/null || true
+              fi
+              [ -x /etc/init.d/uhttpd ] && /etc/init.d/uhttpd reload 2>/dev/null || true
+              [ -x /etc/init.d/nginx ] && /etc/init.d/nginx reload 2>/dev/null || true
+            fi
+            sync
+          }
+
+          APP_PKG="luci-app-cloudflared.ipk"
+          I18N_PKG="luci-i18n-cloudflared-zh-cn.ipk"
+
+          if [ ! -f "$APP_PKG" ]; then
+            echo "错误: 缺少 $APP_PKG"
+            ls -l
+            exit 1
+          fi
+
+          refresh_luci
+
+          if ! opkg update; then
+            echo "更新软件源列表错误，请检查路由器网络以及软件源。"
+            exit 1
+          fi
+
+          echo "安装基础依赖..."
+          opkg install luci-compat luci-lib-jsonc libuci-lua 2>/dev/null || true
+
+          if [ -d depends ] && ls depends/*.ipk >/dev/null 2>&1; then
+            echo "安装依赖包..."
+            opkg install depends/*.ipk || true
+          fi
+
+          echo "安装 Cloudflared LuCI 应用..."
+          opkg install "$APP_PKG" --force-reinstall || exit 1
+
+          if [ -f "$I18N_PKG" ]; then
+            echo "安装中文语言包: $I18N_PKG"
+            opkg install "$I18N_PKG" || true
+          else
+            echo "未包含中文语言包，继续安装主程序。"
+          fi
+
+          # 尝试启用/启动 cloudflared 服务（若存在）
+          if [ -x /etc/init.d/cloudflared ]; then
+            /etc/init.d/cloudflared enable 2>/dev/null || true
+            /etc/init.d/cloudflared restart 2>/dev/null || true
+          fi
+
+          refresh_luci
+
+          # 验证安装结果
+          if ls /usr/lib/lua/luci/controller | grep -q 'cloudflared'; then
+            echo "✓ 安装完成！请在 LuCI 界面 服务→Cloudflared 查看。"
+            exit 0
+          else
+            echo "! 警告：未检测到 Cloudflared 控制器文件，可能需刷新浏览器或重新登录 LuCI。"
+            exit 0
+          fi
+          EOF
+          chmod +x "$STAGING_DIR/install.sh"
+
+          OUTPUT="Cloudflared_${APP_VERSION}_${ARCH_MAP}_all_sdk_${SDK_VER}.run"
+          LABEL="Cloudflared_${APP_VERSION}_with_sdk_${SDK_VER}"
+          makeself --gzip --nox11 "$STAGING_DIR" "$OUTPUT" "$LABEL" ./install.sh
+
+          echo "Cloudflared(luci-app)版本: $APP_VERSION" > version.txt
+          echo "SDK版本: $SDK_VER" >> version.txt
+          echo "构建时间: ${{ steps.date.outputs.date }}" >> version.txt
+          echo "目标架构: $ARCH_MAP" >> version.txt
+          echo "GitHub Actions运行ID: ${{ github.run_id }}" >> version.txt
+
+          rm -rf artifact/installer/*
+          mkdir -p artifact/installer
+          mv -f "$OUTPUT" artifact/installer/
+          mv -f version.txt artifact/installer/
+          echo "构建产物："
+          ls -lh artifact/installer/
+
+      - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: luci-app-cloudflared-ipks-${{ github.run_id }}
-          path: artifacts/*.ipk
-          if-no-files-found: error
+          name: Cloudflared_${{ steps.parsever.outputs.appver }}_${{ env.ARCH_MAP }}_all_sdk_${{ env.SDK_VER }}
+          path: ./artifact/installer/
 
-      - name: Show result summary
-        run: |
-          echo "Built IPKs:" && ls -lh artifacts || true
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: cloudflared-${{ env.ARCH_MAP }}-${{ steps.parsever.outputs.appver }}-${{ github.run_id }}
+          name: Cloudflared ${{ steps.parsever.outputs.appver }} (${{
+            env.ARCH_MAP }}) .run installer
+          files: |
+            artifact/installer/Cloudflared_${{ steps.parsever.outputs.appver }}_${{ env.ARCH_MAP }}_all_sdk_${{ env.SDK_VER }}.run
+            artifact/installer/version.txt
+          body: |
+            ## Cloudflared ${{ steps.parsever.outputs.appver }} - ${{ env.ARCH_MAP }}
+            
+            Cloudflared(luci-app)版本: ${{ steps.parsever.outputs.appver }}
+            SDK版本: ${{ env.SDK_VER }}
+            构建时间: ${{ steps.date.outputs.date }}
+            目标架构: ${{ env.ARCH_MAP }}
+            GitHub Actions运行ID: ${{ github.run_id }}
+            
+            ### 安装方法
+            
+            1. 下载 `Cloudflared_${{ steps.parsever.outputs.appver }}_${{ env.ARCH_MAP }}_all_sdk_${{ env.SDK_VER }}.run` 到路由器
+            2. 执行 `chmod +x Cloudflared_${{ steps.parsever.outputs.appver }}_${{ env.ARCH_MAP }}_all_sdk_${{ env.SDK_VER }}.run && ./Cloudflared_${{
+              steps.parsever.outputs.appver }}_${{ env.ARCH_MAP }}_all_sdk_${{ env.SDK_VER }}.run`
+            3. 完成后，在 LuCI 界面中访问 服务→Cloudflared
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
