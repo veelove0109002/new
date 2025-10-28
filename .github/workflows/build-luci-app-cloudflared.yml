@@ -85,6 +85,17 @@ jobs:
           rsync -a "$TMP_LUCI/applications/luci-app-cloudflared/" "$PKGDIR/"
           # 修正 luci.mk 包含路径，适配 package/custom 位置
           sed -i 's|^include \.\./\.\./luci\.mk|include $(TOPDIR)/feeds/luci/luci.mk|' "$PKGDIR/Makefile"
+
+          # 将菜单从 VPN 移到 服务（兼容旧/新 LuCI 菜单实现）
+          if [ -f "$PKGDIR/luasrc/controller/cloudflared.lua" ]; then
+            sed -i 's|{"admin", *"vpn"|{"admin","services"|g' "$PKGDIR/luasrc/controller/cloudflared.lua" || true
+          fi
+          if ls "$PKGDIR"/root/usr/share/luci/menu.d/*.json >/dev/null 2>&1; then
+            sed -i 's|admin/vpn/|admin/services/|g' "$PKGDIR"/root/usr/share/luci/menu.d/*.json || true
+          fi
+          if ls "$PKGDIR"/htdocs/luci-static/resources/*.js >/dev/null 2>&1; then
+            sed -i 's|admin/vpn/|admin/services/|g' "$PKGDIR"/htdocs/luci-static/resources/*.js || true
+          fi
           echo "Official luci-app-cloudflared synced from openwrt/luci (openwrt-23.05):"
           grep -E 'PKG_VERSION|PKG_RELEASE|LUCI_TITLE' -n "$PKGDIR/Makefile" || true
           ls -lah "$PKGDIR" | sed -n '1,200p'
